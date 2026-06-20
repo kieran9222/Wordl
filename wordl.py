@@ -37,8 +37,8 @@ def _load_words(path: str) -> list:
         return [w for line in f if len(w := line.strip().lower()) == 5 and w.isalpha()]
 
 _DIR          = os.path.dirname(os.path.abspath(__file__))
-ANSWERS       = _load_words(os.path.join(_DIR, "answers.txt"))
-_ALL_GUESSES  = _load_words(os.path.join(_DIR, "words.txt"))
+ANSWERS       = _load_words(os.path.join(_DIR, "data/answers.txt"))
+_ALL_GUESSES  = _load_words(os.path.join(_DIR, "data/words.txt"))
 ALL_WORDS     = set(_ALL_GUESSES) | set(ANSWERS)
 
 

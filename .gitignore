@@ -1,0 +1,6 @@
+*-test.py
+*.pyc
+*__pycache__
+*.zip
+*.webp
+artefacts/

@@ -1,9 +1,6 @@
 """
 Wordle simulator results visualizer.
 
-Produces two PNG files in the same directory as this script:
-  scatter.png  — histograms of guess distribution per starting word
-  barchart.png — text lists of target words averaging 7 or 2 guesses
 """
 from pathlib import Path
 
@@ -75,9 +72,9 @@ fig.legend(handles=legend_handles, loc="lower center", ncol=3, fontsize=9,
 
 fig.suptitle("Wordle Solver — Guess Distribution per Starting Word", fontsize=13, y=1.01)
 plt.tight_layout()
-fig.savefig(HERE / "scatter.png", dpi=150, bbox_inches="tight")
+fig.savefig(HERE / "histogram.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
-print("Saved scatter.png")
+print("Saved histogram.png")
 
 # ── Image 2: Word lists (avg rounds to 7 or 2) ──────────────────────────────
 
@@ -103,6 +100,6 @@ ax2.text(0.5, 0.97, "\n".join(twos) if twos else "(none)",
 
 fig.suptitle("Target Words by Rounded Average Guess Count", fontsize=12, y=1.02)
 plt.tight_layout()
-fig.savefig(HERE / "barchart.png", dpi=150, bbox_inches="tight")
+fig.savefig(HERE / "list.png", dpi=150, bbox_inches="tight")
 plt.close(fig)
-print("Saved barchart.png")
+print("Saved list.png")

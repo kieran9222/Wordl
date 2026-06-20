@@ -262,7 +262,7 @@ class WordlDriver:
 
 def main():
     wordlist = build_wordlist()
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results.csv")
+    out = os.path.join(_PARENT, "data\\results.csv")
     total = len(STARTING_WORDS) * ANSWERS_COUNT
     done = 0
 
