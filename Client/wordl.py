@@ -2,6 +2,10 @@
 import os
 import random
 import sys
+import time
+
+import requests
+from dotenv import load_dotenv
 
 # ── ANSI constants ────────────────────────────────────────────────────────────
 RESET     = "\033[0m"
@@ -40,6 +44,76 @@ _DIR          = os.path.dirname(os.path.abspath(__file__))
 ANSWERS       = _load_words(os.path.join(_DIR, "data/answers.txt"))
 _ALL_GUESSES  = _load_words(os.path.join(_DIR, "data/words.txt"))
 ALL_WORDS     = set(_ALL_GUESSES) | set(ANSWERS)
+
+load_dotenv()
+GAME_SERVER_URL = os.environ["GAME_SERVER_URL"]
+
+
+def _call_game_server(path: str, json: dict):
+    '''POSTs to the game server, exiting cleanly (rather than a raw traceback) if it's unreachable —
+    unlike a failed result-save, a failed login/register truly blocks play'''
+    try:
+        return requests.post(f"{GAME_SERVER_URL}{path}", json=json)
+    except requests.exceptions.RequestException:
+        print("  Can't reach the game server right now.")
+        sys.exit(1)
+
+
+def login_or_register() -> tuple:
+    '''single function to handle login screen. Works recursively until it can return a valid user ID,
+    creating a user if it has to'''
+    print("\n  ── Account ───────────────────────────────")
+    print("  [1] Login")
+    print("  [2] Create account")
+    while True:
+        choice = input("  > ").strip()
+        if choice in ("1", "2"):
+            break
+        print("  Please enter 1 or 2.")
+
+    username = input("  Username: ").strip()
+
+    if choice == "1":
+        while True:
+            password = input("  Password: ").strip()
+            resp = _call_game_server("/login", {"username": username, "password": password})
+            if resp.status_code == 200:
+                data = resp.json()
+                print(f"  Welcome back, {username}!")
+                return data["user_id"], data["token"]
+            if resp.status_code == 404:
+                print(f"  No account found for '{username}'. Please try again.")
+                return login_or_register()
+            print("  Incorrect password, try again.")
+    else:
+        while True:
+            password = input("  Password: ").strip()
+            confirm  = input("  Confirm password: ").strip()
+            if password == confirm:
+                break
+            print("  Passwords do not match, try again.")
+        resp = _call_game_server("/register", {"username": username, "password": password})
+        if resp.status_code == 409:
+            print(f"  Username '{username}' is already taken. Please try again.")
+            return login_or_register()
+        data = resp.json()
+        print(f"  Account created. Welcome, {username}!")
+        return data["user_id"], data["token"]
+
+
+def save_result(token: str, target_word: str, start_word: str, guesses_count: int, won: bool, time_played: int) -> None:
+    '''posts a game result to the game server with the token; a failed save shouldn't crash the game'''
+    try:
+        requests.post(
+            f"{GAME_SERVER_URL}/results",
+            json={
+                "target_word": target_word, "start_word": start_word,
+                "guesses": guesses_count, "win": won, "time_played": time_played,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    except requests.exceptions.RequestException:
+        print("  (couldn't save this result to the server)")
 
 
 # ── Core helpers ──────────────────────────────────────────────────────────────
@@ -150,20 +224,17 @@ def main() -> None:
         gets the user's guess after printing the previous guess state (or default state), handles winning and losing outside the for loop. '''
     enable_ansi_windows()
 
-    simulate    = "--simulate" in sys.argv
-    quiet       = "--quiet"    in sys.argv
-    _sim_index  = 0
+    quiet = "--quiet" in sys.argv
+
+    user_id, token = login_or_register()
 
     while True:
-        if simulate:
-            target    = ANSWERS[_sim_index % len(ANSWERS)]
-            _sim_index += 1
-        else:
-            target    = random.choice(ANSWERS)
+        target = random.choice(ANSWERS)
         guesses: list = []
         scores:  list = []
         letter_states = {chr(ord("a") + i): "unknown" for i in range(26)}
         won           = False
+        start_time    = time.monotonic()
 
         for attempt in range(1, 7):
             if not quiet:
@@ -183,11 +254,15 @@ def main() -> None:
                 won = True
                 break
 
+        time_played = int(time.monotonic() - start_time)
+
         if not quiet:
             clear_screen()
         print_intro()
         render_board(guesses, scores)
         render_keyboard(letter_states)
+
+        save_result(token, target, guesses[0], len(guesses), won, time_played)
 
         if won:
             count = len(guesses)

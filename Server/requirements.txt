@@ -1,0 +1,5 @@
+psycopg[binary]
+python-dotenv
+faker
+wordfreq
+plotly

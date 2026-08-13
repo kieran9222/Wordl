@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Wordl Dashboard{% endblock %}
+{% block content %}
+<div class="layout">
+  <section class="card leaderboard-card">
+    <div class="segmented" role="tablist">
+      <button type="button" class="active" data-sort="wins">Wins</button>
+      <button type="button" data-sort="streak">Streak</button>
+    </div>
+    <ol class="list" id="leaderboard-wins">
+      {% for username, value in leaderboards.wins %}
+      <li>
+        <span class="rank">{{ loop.index }}</span>
+        <a href="/dashboard/profile/{{ username }}">{{ username }}</a>
+        <span class="value">{{ value }} wins</span>
+      </li>
+      {% else %}
+      <li><span class="value">No players yet.</span></li>
+      {% endfor %}
+    </ol>
+    <ol class="list hidden" id="leaderboard-streak">
+      {% for username, value in leaderboards.streak %}
+      <li>
+        <span class="rank">{{ loop.index }}</span>
+        <a href="/dashboard/profile/{{ username }}">{{ username }}</a>
+        <span class="value">{{ value }} streak</span>
+      </li>
+      {% else %}
+      <li><span class="value">No players yet.</span></li>
+      {% endfor %}
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Find a player</h2>
+    <form class="search-form" onsubmit="return wordlGoToProfile(event)">
+      <input id="profile-search" list="usernames" name="username" placeholder="username…" autocomplete="off" required>
+      <datalist id="usernames">
+        {% for name in usernames %}<option value="{{ name }}">{% endfor %}
+      </datalist>
+      <button type="submit">Go</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">Most popular starting words</h2>
+    <div class="list">
+      {% for word, plays, wins in popular_words %}
+      {% set winrate = (100 * wins / plays) if plays else 0 %}
+      <div class="word-row">
+        <div class="tiles">
+          {% for letter in word %}<span class="tile">{{ letter }}</span>{% endfor %}
+        </div>
+        <div class="meter"><span style="width: {{ winrate | round(0) }}%"></span></div>
+        <span class="word-stat">{{ winrate | round(0) | int }}% win</span>
+      </div>
+      {% else %}
+      <div class="word-row">No games played yet.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<script>
+function wordlGoToProfile(e) {
+  e.preventDefault();
+  const val = document.getElementById('profile-search').value.trim();
+  if (val) location.href = '/dashboard/profile/' + encodeURIComponent(val);
+  return false;
+}
+
+document.querySelectorAll('.segmented [data-sort]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.segmented [data-sort]').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('leaderboard-wins').classList.toggle('hidden', btn.dataset.sort !== 'wins');
+    document.getElementById('leaderboard-streak').classList.toggle('hidden', btn.dataset.sort !== 'streak');
+  });
+});
+</script>
+{% endblock %}
