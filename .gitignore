@@ -3,4 +3,5 @@
 *__pycache__
 *.zip
 *.webp
-artefacts/
+*.env
+dashboard.html
