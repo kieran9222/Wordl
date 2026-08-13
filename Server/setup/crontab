@@ -1,5 +1,0 @@
-SHELL=/bin/sh
-PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
-
-0 0 * * * root . /etc/container.env && python3 /app/Server/scheduler/reset_daily_streak.py >> /var/log/cron.log 2>&1
-
