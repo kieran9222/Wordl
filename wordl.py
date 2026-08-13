@@ -1,7 +1,11 @@
 """Wordl — a terminal Wordle clone. Usage: python wordl.py"""
+import hashlib
 import os
 import random
+import secrets
 import sys
+
+import psycopg
 
 # ── ANSI constants ────────────────────────────────────────────────────────────
 RESET     = "\033[0m"
@@ -40,6 +44,89 @@ _DIR          = os.path.dirname(os.path.abspath(__file__))
 ANSWERS       = _load_words(os.path.join(_DIR, "data/answers.txt"))
 _ALL_GUESSES  = _load_words(os.path.join(_DIR, "data/words.txt"))
 ALL_WORDS     = set(_ALL_GUESSES) | set(ANSWERS)
+
+DB_DSN = "postgresql://postgres:password1@localhost:5432/postgres"
+
+
+# ── Database ──────────────────────────────────────────────────────────────────
+def connect_db():
+    '''connects to the database with DB_DSN string, returns connection'''
+    return psycopg.connect(DB_DSN)
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 260_000).hex()
+    return f"sha256:{salt}:{h}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    _, salt, expected = stored.split(":")
+    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 260_000).hex()
+    return secrets.compare_digest(h, expected)
+
+
+def login_or_register(conn) -> int:
+    print("\n  ── Account ───────────────────────────────")
+    print("  [1] Login")
+    print("  [2] Create account")
+    while True:
+        choice = input("  > ").strip()
+        if choice in ("1", "2"):
+            break
+        print("  Please enter 1 or 2.")
+
+    username = input("  Username: ").strip()
+
+    if choice == "1":
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, password FROM users WHERE username = %s", (username,))
+            row = cur.fetchone()
+        if not row:
+            print(f"  No account found for '{username}'. Please try again.")
+            return login_or_register(conn)
+        user_id, stored_pw = row
+        while True:
+            password = input("  Password: ").strip()
+            if verify_password(password, stored_pw):
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_id,))
+                conn.commit()
+                print(f"  Welcome back, {username}!")
+                return user_id
+            print("  Incorrect password, try again.")
+    else:
+        username_input = username
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE username = %s", (username_input,))
+            if cur.fetchone():
+                print(f"  Username '{username_input}' is already taken. Please try again.")
+                return login_or_register(conn)
+        while True:
+            password = input("  Password: ").strip()
+            confirm  = input("  Confirm password: ").strip()
+            if password == confirm:
+                break
+            print("  Passwords do not match, try again.")
+        hashed = hash_password(password)
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO users (username, password) VALUES (%s, %s) RETURNING id",
+                (username_input, hashed),
+            )
+            user_id = cur.fetchone()[0]
+        conn.commit()
+        print(f"  Account created. Welcome, {username_input}!")
+        return user_id
+
+
+def save_result(conn, user_id: int, target_word: str, start_word: str, guesses_count: int, won: bool) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO results (user_id, target_word, start_word, guesses, win) VALUES (%s, %s, %s, %s, %s)",
+            (user_id, target_word, start_word, guesses_count, won),
+        )
+    conn.commit()
 
 
 # ── Core helpers ──────────────────────────────────────────────────────────────
@@ -154,6 +241,12 @@ def main() -> None:
     quiet       = "--quiet"    in sys.argv
     _sim_index  = 0
 
+    conn = connect_db()
+    if simulate:
+        user_id = None
+    else:
+        user_id = login_or_register(conn)
+
     while True:
         if simulate:
             target    = ANSWERS[_sim_index % len(ANSWERS)]
@@ -189,6 +282,9 @@ def main() -> None:
         render_board(guesses, scores)
         render_keyboard(letter_states)
 
+        if user_id is not None:
+            save_result(conn, user_id, target, guesses[0], len(guesses), won)
+
         if won:
             count = len(guesses)
             print(f"  You got it in {count} guess{'es' if count != 1 else ''}! Well done!\n")
@@ -204,6 +300,8 @@ def main() -> None:
         if again != "y":
             print("  Thanks for playing!\n")
             break
+
+    conn.close()
 
 
 if __name__ == "__main__":
